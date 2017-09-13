@@ -7,7 +7,7 @@
 //
 
 #import <React/RCTViewManager.h>
-
+#import "RNTableView.h"
 @interface RNTableViewManager : RCTViewManager
-
+@property(nonatomic,strong) RNTableView *tableview;
 @end

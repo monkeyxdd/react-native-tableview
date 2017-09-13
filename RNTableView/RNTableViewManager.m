@@ -7,18 +7,24 @@
 //
 
 #import "RNTableViewManager.h"
-#import "RNTableView.h"
 #import <React/RCTBridge.h>
 #import <React/RCTConvert.h>
 #import <React/RCTFont.h>
 #import <React/RCTUIManager.h>
+
+@interface RNTableViewManager()<RNTableViewDatasource>
+
+@end
 
 @implementation RNTableViewManager
 
 RCT_EXPORT_MODULE()
 - (UIView *)view
 {
-    return [[RNTableView alloc] initWithBridge:self.bridge];
+    _tableview = [[RNTableView alloc] initWithBridge:self.bridge];
+    _tableview.dataSourceDeletate = self;
+    return _tableview;
+//    return [[RNTableView alloc] initWithBridge:self.bridge];
 }
 
 - (NSArray *)customDirectEventTypes
@@ -27,11 +33,12 @@ RCT_EXPORT_MODULE()
              @"onWillDisplayCell",
              @"onEndDisplayingCell",
              @"onItemNotification",
-             @"onAccessoryPress"
+             @"onAccessoryPress",
              ];
 }
 
 RCT_EXPORT_VIEW_PROPERTY(sections, NSArray)
+RCT_EXPORT_VIEW_PROPERTY(isFetchError, BOOL)
 RCT_EXPORT_VIEW_PROPERTY(json, NSString)
 RCT_EXPORT_VIEW_PROPERTY(editing, BOOL)
 RCT_EXPORT_VIEW_PROPERTY(autoFocus, BOOL)
@@ -51,12 +58,13 @@ RCT_EXPORT_VIEW_PROPERTY(tintColor, UIColor)
 RCT_EXPORT_VIEW_PROPERTY(selectedTextColor, UIColor)
 RCT_EXPORT_VIEW_PROPERTY(selectedBackgroundColor, UIColor)
 RCT_EXPORT_VIEW_PROPERTY(detailTextColor, UIColor)
-RCT_EXPORT_VIEW_PROPERTY(headerTextColor, UIColor)
 RCT_EXPORT_VIEW_PROPERTY(separatorColor, UIColor)
 RCT_EXPORT_VIEW_PROPERTY(moveWithinSectionOnly, BOOL)
 RCT_EXPORT_VIEW_PROPERTY(allowsToggle, BOOL)
 RCT_EXPORT_VIEW_PROPERTY(allowsMultipleSelection, BOOL)
 RCT_EXPORT_VIEW_PROPERTY(alwaysBounceVertical, BOOL)
+RCT_EXPORT_VIEW_PROPERTY(isNeedHeader, BOOL)
+RCT_EXPORT_VIEW_PROPERTY(isNeedFooter, BOOL)
 
 
 RCT_CUSTOM_VIEW_PROPERTY(tableViewStyle, UITableViewStyle, RNTableView) {
@@ -65,10 +73,6 @@ RCT_CUSTOM_VIEW_PROPERTY(tableViewStyle, UITableViewStyle, RNTableView) {
 
 RCT_CUSTOM_VIEW_PROPERTY(scrollEnabled, BOOL, RNTableView) {
     [view setScrollEnabled:[RCTConvert BOOL:json]];
-}
-
-RCT_CUSTOM_VIEW_PROPERTY(sectionIndexTitlesEnabled, BOOL, RNTableView) {
-    [view setSectionIndexTitlesEnabled:[RCTConvert BOOL:json]];
 }
 
 RCT_EXPORT_VIEW_PROPERTY(cellForRowAtIndexPath, NSArray)
@@ -236,7 +240,30 @@ RCT_EXPORT_METHOD(scrollTo:(nonnull NSNumber *)reactTag
          [view scrollToOffsetX:x offsetY:y animated:true];
      }];
 }
+RCT_EXPORT_METHOD(isFetchError:(BOOL)isError)
+{
+    [_tableview setIsFetchError:isError];
+}
+//TODO 尝试数据源改变render界面
+RCT_EXPORT_METHOD(setDataSource:(NSArray *)data isHeader:(BOOL) isHeader)
+{
+    [_tableview setTempSections:data isHeader:isHeader];
+}
+RCT_EXPORT_VIEW_PROPERTY(onHeader, RCTBubblingEventBlock)
+RCT_EXPORT_VIEW_PROPERTY(onFooter, RCTBubblingEventBlock)
 
+#pragma mark RNTableViewDelegate
+-(void) RNTable:(RNTableView *)view headerChange:(NSDictionary *)data
+{
+    //BOOL value = [sender boolValue];
+    view.onHeader(data);
+    //[self.bridge.eventDispatcher sendInputEventWithName:@"headrChange" body:data];
+}
+-(void) RNTable:(RNTableView *)view footerChange:(NSDictionary *)data
+{
+    view.onFooter(data);
+//    _tableview.footerChange(@{@"value":[NSNumber numberWithBool:YES]});
+}
 //
 //- (NSDictionary *)constantsToExport
 //{

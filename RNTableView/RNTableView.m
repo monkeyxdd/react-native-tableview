@@ -16,6 +16,7 @@
 #import "RNTableFooterView.h"
 #import "RNTableHeaderView.h"
 #import "RNReactModuleCell.h"
+#import "MJRefresh.h"
 
 @interface RNTableView()<UITableViewDataSource, UITableViewDelegate> {
     id<RNTableViewDatasource> datasource;
@@ -31,30 +32,25 @@
     NSArray *_items;
     NSMutableArray *_cells;
     NSString *_reactModuleCellReuseIndentifier;
-    NSMutableDictionary *_lastValue;
+    __block NSInteger _cellsCount;
 }
 
-- (void)setEditing:(BOOL)editing {
-    _editing = editing;
-    
+-(void)setEditing:(BOOL)editing {
     [self.tableView setEditing:editing animated:YES];
 }
 
-- (void)setSeparatorColor:(UIColor *)separatorColor {
+-(void) setSeparatorColor:(UIColor *)separatorColor
+{
     _separatorColor = separatorColor;
 
     [self.tableView setSeparatorColor: separatorColor];
 }
 
-- (void)setScrollEnabled:(BOOL)scrollEnabled {
+-(void)setScrollEnabled:(BOOL)scrollEnabled
+{
     _scrollEnabled = scrollEnabled;
 
     [self.tableView setScrollEnabled:scrollEnabled];
-}
-
--(void)setSectionIndexTitlesEnabled:(BOOL)sectionIndexTitlesEnabled
-{
-    _sectionIndexTitlesEnabled = sectionIndexTitlesEnabled;
 }
 
 - (void)insertReactSubview:(UIView *)subview atIndex:(NSInteger)atIndex
@@ -100,6 +96,7 @@
         _autoFocus = YES;
         _autoFocusAnimate = YES;
         _allowsToggle = NO;
+        _cellsCount = 0;
         _allowsMultipleSelection = NO;
     }
     return self;
@@ -161,23 +158,9 @@ RCT_NOT_IMPLEMENTED(-initWithCoder:(NSCoder *)aDecoder)
     if (_autoFocus && selectedSection>=0 && [self numberOfSectionsInTableView:self.tableView] && [self tableView:self.tableView numberOfRowsInSection:selectedSection]){
         dispatch_async(dispatch_get_main_queue(), ^{
             NSIndexPath *indexPath = [NSIndexPath indexPathForItem:[_selectedIndexes[selectedSection] intValue ]inSection:selectedSection];
-            if (!_allowsMultipleSelection) {
-                _lastValue = [self dataForRow:indexPath.item section:indexPath.section];
-            }
             [self.tableView scrollToRowAtIndexPath:indexPath atScrollPosition:UITableViewScrollPositionMiddle animated:_autoFocusAnimate];
         });
     }
-}
-
-- (NSArray *)sectionIndexTitlesForTableView:(UITableView *)tableView {
-    // create selected indexes
-    NSMutableArray *keys = [NSMutableArray arrayWithCapacity:[_sections count]];
-
-    for (NSDictionary *section in _sections){
-        [keys addObject:section[@"label"]];
-    }
-
-    return keys;
 }
 
 #pragma mark - Public APIs
@@ -201,13 +184,23 @@ RCT_NOT_IMPLEMENTED(-initWithCoder:(NSCoder *)aDecoder)
     _tableView.showsVerticalScrollIndicator = self.showsVerticalScrollIndicator;
     _tableView.backgroundColor = [UIColor clearColor];
     _tableView.alwaysBounceVertical = self.alwaysBounceVertical;
+    if(_isNeedHeader == YES)
+    {
+    _tableView.mj_header  = [MJRefreshNormalHeader headerWithRefreshingBlock:^{
+        [self loadNewData];
+    }];
+    }
+    if (_isNeedFooter == YES) {
+        _tableView.mj_footer = [MJRefreshBackNormalFooter footerWithRefreshingBlock:^{
+            [self loadMoreData];
+        }];
+    }
     UIView *view = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, 0.001, 0.001)];
     _tableView.tableHeaderView = view;
     _tableView.tableFooterView = view;
     _tableView.separatorStyle = self.separatorStyle;
     _tableView.separatorColor = self.separatorColor;
     _tableView.scrollEnabled = self.scrollEnabled;
-    _tableView.editing = self.editing;
     _reactModuleCellReuseIndentifier = @"ReactModuleCell";
     [_tableView registerClass:[RNReactModuleCell class] forCellReuseIdentifier:_reactModuleCellReuseIndentifier];
     [self addSubview:_tableView];
@@ -222,8 +215,20 @@ RCT_NOT_IMPLEMENTED(-initWithCoder:(NSCoder *)aDecoder)
         footer.textLabel.font = self.footerFont;
     }
 }
-
-
+-(void) loadNewData{
+    NSLog(@"1111");
+    if(self.dataSourceDeletate!=nil && [self.dataSourceDeletate respondsToSelector:@selector(RNTable:headerChange:)])
+      {
+        [self.dataSourceDeletate RNTable:self headerChange:@{@"value":[NSNumber numberWithBool:YES]}];
+      }
+}
+-(void) loadMoreData{
+    NSLog(@"2222");
+    if(self.dataSourceDeletate!=nil && [self.dataSourceDeletate respondsToSelector:@selector(RNTable:footerChange:)])
+    {
+        [self.dataSourceDeletate RNTable:self footerChange:@{@"value":[NSNumber numberWithBool:YES]}];
+    }
+}
 -(void)setHeaderHeight:(float)headerHeight {
     _headerHeight = headerHeight;
 }
@@ -263,6 +268,15 @@ RCT_NOT_IMPLEMENTED(-initWithCoder:(NSCoder *)aDecoder)
 
 -(void)tableView:(UITableView *)tableView willDisplayCell:(UITableViewCell *)cell forRowAtIndexPath:(NSIndexPath *)indexPath
 {
+    if(_cellsCount > 0)
+    {
+        if([[_cells objectAtIndex:0] count] == [_sections[0][@"items"] count]){
+            NSInteger count = (_cellsCount - 1);
+                [self.tableView scrollToRowAtIndexPath:[NSIndexPath indexPathForRow:count inSection:0] atScrollPosition:UITableViewScrollPositionMiddle animated:NO];
+                _cellsCount = 0;
+        }
+    }
+    
     if (self.emptyInsets){
         // Remove separator inset
         if ([cell respondsToSelector:@selector(setSeparatorInset:)]) {
@@ -343,14 +357,39 @@ RCT_NOT_IMPLEMENTED(-initWithCoder:(NSCoder *)aDecoder)
     [_eventDispatcher sendInputEventWithName:@"onEndDisplayingCell" body:@{@"target":self.reactTag, @"row":@(indexPath.row), @"section": @(indexPath.section)}];
 }
 
-
+-(void) setIsFetchError:(BOOL)isFetchError
+{
+    if([self.tableView.mj_header isRefreshing])
+    {
+        [self.tableView.mj_header endRefreshing];
+    }
+    if([self.tableView.mj_footer isRefreshing])
+    {
+        [self.tableView.mj_footer endRefreshing];
+    }
+}
+//-(void) setTempSections:(NSArray *)tempSections isHeader:(BOOL) isHeader
+//{
+//    NSMutableArray *tempArray = _sections[0][@"items"];
+//    NSInteger count = [_sections[0][@"count"] integerValue];
+//    if(isHeader == YES)
+//    {
+//        [tempArray removeAllObjects];
+//        count = 0;
+//    }
+//    [tempArray addObjectsFromArray:tempSections];
+//    _sections[0][@"items"]=tempArray;
+//    count = count + tempSections.count * 2;
+//    _sections[0][@"count"] = [NSNumber numberWithInteger:count];
+//    [self setSections:_sections];
+//}
 - (void)setSections:(NSArray *)sections
 {
     _sections = [NSMutableArray arrayWithCapacity:[sections count]];
 
     // create selected indexes
     _selectedIndexes = [NSMutableArray arrayWithCapacity:[sections count]];
-
+    
     BOOL found = NO;
     for (NSDictionary *section in sections){
         NSMutableDictionary *sectionData = [NSMutableDictionary dictionaryWithDictionary:section];
@@ -377,7 +416,27 @@ RCT_NOT_IMPLEMENTED(-initWithCoder:(NSCoder *)aDecoder)
         sectionData[@"items"] = items;
         [_sections addObject:sectionData];
     }
+
+    if(self.tableView.mj_header.isRefreshing)
+    {
+        if(_cells.count > 0)
+        {
+            _cells = [NSMutableArray array];
+        }
+        [self.tableView.mj_header endRefreshing];
+    }
+
+    if(self.tableView.mj_footer.isRefreshing)
+    {
+        if(_cells.count > 0){
+        _cellsCount = (NSInteger)[[_cells objectAtIndex:0] count];
+        }
+        [self.tableView.mj_footer endRefreshing];
+        //[self.tableView setScrollsToTop:NO];
+
+    }
     [self.tableView reloadData];
+    [self.tableView layoutIfNeeded];
 }
 
 -(NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
@@ -416,11 +475,13 @@ RCT_NOT_IMPLEMENTED(-initWithCoder:(NSCoder *)aDecoder)
 }
 
 -(UITableViewCell* )tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
+    NSLog(@"======%ld",(long)indexPath.row);
     UITableViewCell *cell = nil;
     NSDictionary *item = [self dataForRow:indexPath.item section:indexPath.section];
 
     // check if it is standard cell or user-defined UI
     if ([self hasCustomCells:indexPath.section]){
+        //TODO 出现闪屏
         cell = ((RNCellView *)_cells[indexPath.section][indexPath.row]).tableViewCell;
     } else if (self.reactModuleForCell != nil && ![self.reactModuleForCell isEqualToString:@""]) {
         cell = [self setupReactModuleCell:tableView data:item indexPath:indexPath];
@@ -485,6 +546,7 @@ RCT_NOT_IMPLEMENTED(-initWithCoder:(NSCoder *)aDecoder)
     [tableView deselectRowAtIndexPath:indexPath animated:NO];
 
     NSInteger selectedIndex = [self.selectedIndexes[indexPath.section] integerValue];
+    NSMutableDictionary *oldValue = selectedIndex>=0 ?[self dataForRow:selectedIndex section:indexPath.section] : [NSMutableDictionary dictionaryWithDictionary:@{}];
 
     NSMutableDictionary *newValue = [self dataForRow:indexPath.item section:indexPath.section];
     newValue[@"target"] = self.reactTag;
@@ -496,14 +558,13 @@ RCT_NOT_IMPLEMENTED(-initWithCoder:(NSCoder *)aDecoder)
      * otherwise, add selection to the new row and remove selection from old row if multiple is not allowed.
      * default: allowMultipleSelection:false and allowToggle: false
      */
-    if (self.selectedValue){
+    if ((oldValue[@"selected"] && [oldValue[@"selected"] intValue]) || self.selectedValue){
         if (_allowsToggle && newValue[@"selected"] && [newValue[@"selected"] intValue]) {
             [newValue removeObjectForKey:@"selected"];
         } else {
             if (!_allowsMultipleSelection) {
-                [_lastValue removeObjectForKey:@"selected"];
+                [oldValue removeObjectForKey:@"selected"];
             }
-
             [newValue setObject:@1 forKey:@"selected"];
         }
         [self.tableView reloadData];
@@ -511,7 +572,6 @@ RCT_NOT_IMPLEMENTED(-initWithCoder:(NSCoder *)aDecoder)
 
     [_eventDispatcher sendInputEventWithName:@"press" body:newValue];
     self.selectedIndexes[indexPath.section] = [NSNumber numberWithInteger:indexPath.item];
-        _lastValue = newValue;
 }
 
 - (void)tableView:(UITableView *)tableView accessoryButtonTappedForRowWithIndexPath:(NSIndexPath *)indexPath {

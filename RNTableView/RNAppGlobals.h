@@ -1,5 +1,5 @@
 
-#import <Foundation/Foundation.h>
+#import <foundation/Foundation.h>
 @class RCTBridge;
 
 @interface RNAppGlobals : NSObject {

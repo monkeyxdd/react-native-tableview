@@ -7,7 +7,9 @@
 //
 
 #import <UIKit/UIKit.h>
+#import <React/RCTComponent.h>
 @class RCTBridge;
+@class RNTableView;
 
 @protocol RNTableViewDatasource <NSObject>
 
@@ -17,13 +19,23 @@
 // array of NSDictionary objects (sections) passed to RCTTableViewDatasource (each section should contain "items" value as NSArray of inner items (NSDictionary)
 -(NSArray *)sections;
 
+-(void) RNTable:(RNTableView *) view headerChange:(NSDictionary *) sender;
+
+-(void) RNTable:(RNTableView *) view footerChange:(NSDictionary *) sender;
+
 @end
 
 @interface RNTableView : UIView
 
 - (instancetype)initWithBridge:(RCTBridge *)bridge NS_DESIGNATED_INITIALIZER;
 
+@property (nonatomic, assign) id <RNTableViewDatasource> dataSourceDeletate;
+
+@property (nonatomic, copy) RCTBubblingEventBlock onHeader;
+@property (nonatomic, copy) RCTBubblingEventBlock onFooter;
+
 @property (nonatomic, copy) NSMutableArray *sections;
+@property (nonatomic, assign) BOOL isFetchError;
 @property (nonatomic, copy) NSArray *additionalItems;
 @property (nonatomic, strong) NSString *json;
 @property (nonatomic, strong) NSString *filter;
@@ -41,6 +53,8 @@
 @property (nonatomic, assign) UIEdgeInsets scrollIndicatorInsets;
 @property (nonatomic, assign) BOOL showsHorizontalScrollIndicator;
 @property (nonatomic, assign) BOOL showsVerticalScrollIndicator;
+@property (nonatomic, assign) BOOL isNeedHeader;
+@property (nonatomic, assign) BOOL isNeedFooter;
 
 @property (nonatomic, assign) UITableViewStyle tableViewStyle;
 @property (nonatomic, assign) UITableViewCellStyle tableViewCellStyle;
@@ -69,8 +83,7 @@
 @property (nonatomic) NSString *reactModuleForCell;
 
 @property (nonatomic, assign) BOOL scrollEnabled;
-@property (nonatomic, assign) BOOL sectionIndexTitlesEnabled;
 
 - (void) scrollToOffsetX:(CGFloat)x offsetY:(CGFloat)y animated:(BOOL)animated;
-
+-(void) setTempSections:(NSArray *)tempSections isHeader:(BOOL) isHeader;
 @end
