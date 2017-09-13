@@ -54,6 +54,10 @@ Native iOS UITableView for React Native with JSON support.
 ### List item format
 Items in the list can be either `TableView.Item` or `TableView.Cell`. An `Item` is simply text. A `Cell` can be any complex component. However, only `Item`s can be edited or moved. There are also issues with `Cell`s re-rendering on data changes (#19) that can be avoided by using `Item`s. If you want to be able to re-render, edit or move a complex component, use `reactModuleForCell`, described in [Editable Complex Components](#editable-complex-components).
 
+### Pull and Push(上下拉刷新)
+- 开启上下拉刷新需要设置isNeedHeader={true} isNeedFooter={true} 且设置上下拉回调方法 onHeader和onFooter,不开启则无需设置
+- 若上下拉刷新获取数据失败，关闭上下拉刷新 给tableview设置个ref={'tableview'} 在onHeader或onFooter回调函数中调用 this.refs.tableview.isFetchError(false);
+- 暂只支持单section上下拉刷新
 --
 
 ## Examples
